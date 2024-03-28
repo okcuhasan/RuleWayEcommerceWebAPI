@@ -14,6 +14,8 @@ namespace RuleWayEcommerce.Data.Entity
 
         public string CategoryName { get; set; }
 
+        public int MinimumStockQuantity { get; set; }
+
         public List<Product>? Products { get; set; }
 
     }

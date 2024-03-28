@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RuleWayEcommerce.Data.DTO;
 using RuleWayEcommerce.Data.Entity;
 using RuleWayEcommerce.Service.Abstracts;
@@ -11,15 +12,34 @@ namespace RuleWayEcommerce.API.Controllers
     public class CategoryController : ControllerBase
     {
         private readonly IGenericRepository<Category> _genericRepository;
-        public CategoryController(IGenericRepository<Category> genericRepository)
+        private readonly ApplicationDbContext _context;
+        public CategoryController(IGenericRepository<Category> genericRepository, ApplicationDbContext context)
         {
             _genericRepository = genericRepository;
+            _context = context;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetCategories()
         {
-            var allCategories = await _genericRepository.GetAll();
+            var allCategories = await _context.Categories
+                .Include(x => x.Products)
+                .Select(x => new
+                {
+                    CategoryId = x.CategoryId,
+                    CategoryName = x.CategoryName,
+                    MinimumStockQuantity = x.MinimumStockQuantity,
+                    RelevantProducts = x.Products.Select(x => new
+                    {
+                        ProductId = x.ProductId,
+                        Title = x.Title,
+                        Description = x.Description,
+                        StockQuantity = x.StockQuantity,
+                        CategoryId = x.CategoryId,
+                        CategoryName = x.Category.CategoryName
+                    })
+                    .ToList()
+                }).ToListAsync();
 
             return Ok(allCategories);
         }
@@ -56,8 +76,8 @@ namespace RuleWayEcommerce.API.Controllers
             {
                 var category = new Category
                 {
-                    CategoryId = dtoFields.CategoryId,
                     CategoryName = dtoFields.CategoryName,
+                    MinimumStockQuantity = dtoFields.MinimumStockQuantity,
                 };
                 await _genericRepository.Add(category);
 
@@ -83,6 +103,7 @@ namespace RuleWayEcommerce.API.Controllers
                 else
                 {
                     findedCategory.CategoryName = dtoFields.CategoryName;
+                    findedCategory.MinimumStockQuantity = dtoFields.MinimumStockQuantity;
 
                     await _genericRepository.Update(findedCategory);
                     return NoContent();

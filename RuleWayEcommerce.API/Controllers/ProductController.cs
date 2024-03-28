@@ -22,9 +22,19 @@ namespace RuleWayEcommerce.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetProducts()
         {
-            var allProducts = await _genericRepository.GetAll();
+            var productsWithCategories =  await _context.Products.Include(x => x.Category)
+                .Select(x => new
+                {
+                    ProductId = x.ProductId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    StockQuantity = x.StockQuantity,
+                    CategoryName = x.Category.CategoryName
+                })
+                .ToListAsync();
 
-            return Ok(allProducts);
+            return Ok(productsWithCategories);
+
         }
 
         [HttpGet("{id}")]
@@ -65,17 +75,23 @@ namespace RuleWayEcommerce.API.Controllers
                 }
                 else
                 {
-                    var product = new Product
+                    if (dto.StockQuantity < category.MinimumStockQuantity)
                     {
-                        Title = dto.Title,
-                        Description = dto.Description,
-                        StockQuantity = dto.StockQuantity,
-                        CategoryId = dto.CategoryId,
-                    };
-
-
-                    await _genericRepository.Add(product);
-                    return CreatedAtAction(nameof(GetProducts), new { id = product.ProductId }, product);
+                        return BadRequest
+                            ($"StockQuantity ({dto.StockQuantity}) cannot be less than the MinimumStockQuantity ({category.MinimumStockQuantity})");
+                    }
+                    else
+                    {
+                        var product = new Product
+                        {
+                            Title = dto.Title,
+                            Description = dto.Description,
+                            StockQuantity = dto.StockQuantity,
+                            CategoryId = dto.CategoryId,
+                        };
+                        await _genericRepository.Add(product);
+                        return Ok("Product added successfully");
+                    }
                 }
             }
         }
@@ -105,13 +121,21 @@ namespace RuleWayEcommerce.API.Controllers
                     }
                     else
                     {
-                        findedProduct.Title = dtoFields.Title;
-                        findedProduct.Description = dtoFields.Description;
-                        findedProduct.StockQuantity = dtoFields.StockQuantity;
-                        findedProduct.CategoryId = dtoFields.CategoryId;
+                        if (dtoFields.StockQuantity < category.MinimumStockQuantity)
+                        {
+                            return BadRequest
+                                ($"StockQuantity ({dtoFields.StockQuantity}) cannot be less than the MinimumStockQuantity ({category.MinimumStockQuantity})");
+                        }
+                        else
+                        {
+                            findedProduct.Title = dtoFields.Title;
+                            findedProduct.Description = dtoFields.Description;
+                            findedProduct.StockQuantity = dtoFields.StockQuantity;
+                            findedProduct.CategoryId = dtoFields.CategoryId;
 
-                        await _genericRepository.Update(findedProduct);
-                        return NoContent();
+                            await _genericRepository.Update(findedProduct);
+                            return NoContent();
+                        }
                     }
                 }
             }
@@ -240,6 +264,25 @@ namespace RuleWayEcommerce.API.Controllers
                     return NotFound("No such product found");
                 }
             }
+        }
+
+
+        [HttpPost("filterStockQuantityMinMax")]
+        public async Task<IActionResult> FilterStockQuantityMinMax(int minStockQuantity, int maxStockQuantity)
+        {
+            var data = await _context.Products
+                .Where(x => x.StockQuantity >= minStockQuantity && x.StockQuantity <= maxStockQuantity)
+                .Select(x => new
+                {
+                    ProductId = x.ProductId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    StockQuantity = x.StockQuantity,
+                    CategoryName = x.Category.CategoryName,
+                })
+                .ToListAsync();
+
+            return Ok(data);
         }
     }
 }
